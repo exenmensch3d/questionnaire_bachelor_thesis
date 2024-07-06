@@ -1,0 +1,447 @@
+<!--This code is only meant to be run as an HTML-Question-Block on sosci.com.-->
+<!--Note, that in order to store Values, the according instrumental variables IDs have to be created and referenced in the onEnd() function.-->
+<!--For a review of questionnaires dynamics either run this in SoSci or run the "demo_decision_phase.html" in this folder-->
+
+<style>
+  .grandparent {
+    display: inline-block;
+    text-align: center;
+    display: flex;
+    margin: auto;
+  }
+  .parent {
+    margin: auto;
+    display: inline-block;
+    border: 1px solid black;
+    text-align: center;
+    vertical-align: top;
+  }
+  .child {
+    display: inline-block;
+    border: 1px black;
+    padding: 1rem 1rem;
+    vertical-align: middle;
+  }
+  .gain {
+    color: green;
+    background-color: lightgrey;
+    border: 1px black;
+    padding: 1rem 1rem;
+    vertical-align: middle;
+    border-radius: 12px;
+  }
+  .gain:active {
+    background-color: orange;
+  }
+  .loss {
+    color: red;
+    background-color: lightgrey;
+    border: 1px black;
+    padding: 1rem 1rem;
+    vertical-align: middle;
+    border-radius: 12px;
+  }
+  .button {
+    background-color: gray;
+    border: 1px black;
+    padding: 1rem 1rem;
+    vertical-align: middle;
+    border-radius: 12px;
+    color: white;
+  }
+  .button:hover {
+    background-color: darkgrey;
+  }
+  .button:active {
+    background-color: white;
+  }
+  .progress {
+    margin-left: auto;
+    margin-right: 0;
+  }
+</style>
+
+<div id="progress" class="progress"></div>
+<div
+  id="next"
+  class="grandparent"
+  style="visibility: hidden; font-size: 30px"
+></div>
+<div class="grandparent" id="grandparent_div">
+  <div class="parent" id="present_value_enclosure">
+    <p>1. Situation</p>
+    <div id="PresentValueBox" class="child" style="font-size: 22px">
+      <p id="present_value_text"></p>
+      <!--PresentVaueOption Here-->
+      <div id="present_value_div_content" class="gain">
+        <!-- Display PV Option-->
+      </div>
+    </div>
+    <div id="present_value_submit_button" class="button">Wählen</div>
+  </div>
+  <div class="child">
+    <p id="choice_divider_div">oder</p>
+    <div class="button" id="next_game_button">Weiter</div>
+  </div>
+  <div class="parent" id="combination_div_enclosure">
+    <p>2. Situation</p>
+    <div id="CombinationBox" class="child" style="font-size: 22px">
+      Sie zahlen:
+      <!--CombinationOption Here-->
+      <div id="displayComGain" class="loss">
+        <!-- Display PV Option-->
+      </div>
+      <div id="distanceSeperator" style="font-size: 22px"></div>
+      <div id="displayComLoss" class="gain">
+        <!-- Display PV Option-->
+      </div>
+    </div>
+    <div id="combButton" class="button">Wählen</div>
+  </div>
+</div>
+
+<script type="text/javascript">
+  // Read all the HTML Elements to manipulate them
+  let grandparent_div = document.getElementById("grandparent_div");
+  let next = document.getElementById("next");
+  let present_value_enclosure = document.getElementById(
+    "present_value_enclosure"
+  );
+  let combination_div_enclosure = document.getElementById(
+    "combination_div_enclosure"
+  );
+  let present_value_div_submit_button = document.getElementById(
+    "present_value_submit_button"
+  );
+  let present_value_div = document.getElementById("present_value_div_content");
+  let combination_div_submit_button = document.getElementById("combButton");
+  let combGainDiv = document.getElementById("displayComGain");
+  let combLossDiv = document.getElementById("displayComLoss");
+  let distDiv = document.getElementById("distanceSeperator");
+  let present_value_text = document.getElementById("present_value_text");
+  let progress = document.getElementById("progress");
+  let choice_divider_div = document.getElementById("choice_divider_div");
+  let next_game_button = document.getElementById("next_game_button");
+
+  // Initialize environment
+  let buttonPressCounter = 0;
+  let previousAdjustment = 0;
+
+  const combinations = {
+    small: [-60, 80],
+    large: [-900, 1200],
+  };
+
+  // An array of jsons storing amounts to each distance
+  let distance_and_amount = [
+    {
+      title: "1degree",
+      distance: 1,
+      presentValues: {
+        small: -20,
+        large: -300,
+      },
+      amountConditions: ["small", "large"],
+      pageName: "#1",
+    },
+    {
+      title: "5degree",
+      distance: 5,
+      presentValues: {
+        small: -20,
+        large: -300,
+      },
+      amountConditions: ["small", "large"],
+      pageName: "#5",
+    },
+    {
+      title: "10degree",
+      distance: 10,
+      presentValues: {
+        small: -20,
+        large: -300,
+      },
+      amountConditions: ["small", "large"],
+      pageName: "#10",
+    },
+    {
+      title: "25degree",
+      distance: 25,
+      presentValues: {
+        small: -20,
+        large: -300,
+      },
+      amountConditions: ["small", "large"],
+      pageName: "#25",
+    },
+    {
+      title: "50degree",
+      distance: 50,
+      presentValues: {
+        small: -20,
+        large: -300,
+      },
+      amountConditions: ["small", "large"],
+      pageName: "#50",
+    },
+  ];
+  let distance_and_amountFinished = [];
+  let amountConditions = ["small", "large"];
+  let currentAmountConditon;
+  let current_distance_Index;
+  let totalQuestion = 1;
+
+  // Function to select a random combination of distance and amount from the 'distance_and_amount' array of JSON objects.
+  // It removes the selected combination from the array to ensure it is not selected again.
+  function random_distance_Amount() {
+    current_distance_Index = Math.floor(
+      Math.random() * distance_and_amount.length
+    );
+    let randomAmountIndex = Math.floor(
+      Math.random() *
+        distance_and_amount[current_distance_Index].amountConditions.length
+    );
+    let amount = distance_and_amount[
+      current_distance_Index
+    ].amountConditions.splice(randomAmountIndex, 1)[0];
+    console.log(distance_and_amountFinished);
+    console.log(buttonPressCounter);
+    return amount;
+  }
+  // Function to initiate a question set for a given amount condition.
+  // The 'amount' parameter is generated by the 'random_distance_Amount()' function.
+  function setValues(amount) {
+    SoSciTools.submitButtonsHide();
+    buttonPressCounter = 0;
+    previousAdjustment = 0;
+    let distance_Json = distance_and_amount[current_distance_Index];
+
+    currentAmountConditon = amount;
+    next.innerHTML = `<p>Bei den folgenden fünf Entscheidungen zahlen Sie ${combinations[amount][0]}€ und Person ${distance_Json.pageName} erhält ${combinations[amount][1]}€.</p>`;
+
+    present_value_enclosure.style.visibility = "hidden";
+    combination_div_enclosure.style.visibility = "hidden";
+    choice_divider_div.style.visibility = "hidden";
+    console.log(distance_and_amount.length);
+    next.style.visibility = "visible";
+    next_game_button.style.visibility = "visible";
+  }
+
+  // Handles the sequence of events to facilitate and visualize entering the next game.
+  // This includes updating the visibility of elements, adjusting text and styles based on the current condition,
+  // and displaying the progress of the game.
+  next_game_button.addEventListener("click", (evt) => {
+    let distance_Json = distance_and_amount[current_distance_Index];
+
+    next.style.visibility = "collapse";
+    next_game_button.style.visibility = "collapse";
+    present_value_enclosure.style.visibility = "visible";
+    combination_div_enclosure.style.visibility = "visible";
+    choice_divider_div.style.visibility = "visible";
+
+    if (distance_Json.presentValues[currentAmountConditon] < 0) {
+      present_value_text.innerHTML = `<p>Sie zahlen:</p>`;
+      present_value_div.style.backgroundColor = "lightgrey";
+      present_value_div.style.color = "red";
+    } else {
+      present_value_div.style.backgroundColor = "lightgrey";
+      present_value_text.innerHTML = `<p>Sie bekommen:</p>`;
+      present_value_div.style.color = "green";
+    }
+
+    progress.innerHTML = `<p>Entscheidungsfrage ${totalQuestion} von 50</p>`;
+    present_value_div.innerHTML = `<p> ${distance_Json.presentValues[currentAmountConditon]}€ </p>`;
+    combGainDiv.innerHTML = `<p> ${combinations[currentAmountConditon][0]}€ </p>`;
+    combLossDiv.innerHTML = `<p> ${combinations[currentAmountConditon][1]}€ </p>`;
+    distDiv.innerHTML = `<p> und Person <p style="color: red;">${distance_Json.pageName}</p> bekommt:</p>`;
+    console.log(distance_and_amount);
+  });
+
+  // Handles the submission event for the present value division. This includes updating the background color,
+  // adjusting the values using the downUpAdjust function, and setting a timeout to update the display based on
+  // the current condition (whether the user is paying or receiving an amount). It also updates the progress display.
+  present_value_div_submit_button.addEventListener("click", (evt) => {
+    present_value_div.style.backgroundColor = "orange";
+    downUpAdjust(
+      currentAmountConditon,
+      current_distance_Index,
+      buttonPressCounter,
+      false
+    );
+    setTimeout(() => {
+      if (
+        distance_and_amount[current_distance_Index].presentValues[
+          currentAmountConditon
+        ] < 0
+      ) {
+        present_value_text.innerHTML = `<p>Sie zahlen:</p>`;
+        present_value_div.style.backgroundColor = "lightgrey";
+        present_value_div.style.color = "red";
+      } else {
+        present_value_div.style.backgroundColor = "lightgrey";
+        present_value_text.innerHTML = `<p>Sie bekommen:</p>`;
+        present_value_div.style.color = "green";
+      }
+    }, 100);
+    progress.innerHTML = `<p>Entscheidungsfrage ${totalQuestion} von 50</p>`;
+  });
+
+  // Handles the submission event for the combination division. This includes updating the background color,
+  // adjusting the values using the downUpAdjust function with the 'isCombination' flag set to true,
+  // and setting a timeout to update the display based on the current condition (whether the user is paying or receiving an amount).
+  // It also updates the progress display.
+  combination_div_submit_button.addEventListener("click", (evt) => {
+    present_value_div.style.backgroundColor = "orange";
+    downUpAdjust(
+      currentAmountConditon,
+      current_distance_Index,
+      buttonPressCounter,
+      true
+    );
+    setTimeout(() => {
+      if (
+        distance_and_amount[current_distance_Index].presentValues[
+          currentAmountConditon
+        ] < 0
+      ) {
+        present_value_text.innerHTML = `<p>Sie zahlen:</p>`;
+        present_value_div.style.backgroundColor = "lightgrey";
+        present_value_div.style.color = "red";
+      } else {
+        present_value_div.style.backgroundColor = "lightgrey";
+        present_value_text.innerHTML = `<p>Sie bekommen:</p>`;
+        present_value_div.style.color = "green";
+      }
+    }, 100);
+    progress.innerHTML = `<p>Entscheidungsfrage ${totalQuestion} von 50</p>`;
+  });
+  /**
+   * Adjusts the present value of the given amount condition based on whether the adjustment is down or up.
+   * It also updates the button press counter and handles the end of the sequence if necessary.
+   *
+   * @param {number} amountCondition - The index of the current amount condition.
+   * @param {number} _distance_ArrIndex - The index of the current distance in the distance_and_amount array.
+   * @param {number} i - The current iteration count.
+   * @param {boolean} down - Flag indicating whether to adjust the value down (true) or up (false).
+   */
+  function downUpAdjust(amountCondition, _distance_ArrIndex, i, down) {
+    totalQuestion += 1;
+    buttonPressCounter += 1;
+
+    console.log(buttonPressCounter);
+    let currentValue =
+      distance_and_amount[_distance_ArrIndex].presentValues[amountCondition];
+
+    if (down) {
+      if (previousAdjustment == 0) {
+        previousAdjustment = currentValue;
+        distance_and_amount[_distance_ArrIndex].presentValues[amountCondition] =
+          currentValue - previousAdjustment;
+      } else {
+        let currentAdjustment = 0.5 * previousAdjustment;
+        distance_and_amount[_distance_ArrIndex].presentValues[
+          amountCondition
+        ] -= currentAdjustment;
+        previousAdjustment = currentAdjustment;
+      }
+      console.log(
+        "the present value " +
+          distance_and_amount[_distance_ArrIndex].presentValues[
+            amountCondition
+          ] +
+          " gone down"
+      );
+    } else if (!down) {
+      if (previousAdjustment == 0) {
+        previousAdjustment = currentValue;
+        distance_and_amount[_distance_ArrIndex].presentValues[amountCondition] =
+          currentValue + previousAdjustment;
+      } else {
+        let currentAdjustment = 0.5 * previousAdjustment;
+        distance_and_amount[_distance_ArrIndex].presentValues[
+          amountCondition
+        ] += currentAdjustment;
+        previousAdjustment = currentAdjustment;
+      }
+      console.log(
+        "the present value " +
+          distance_and_amount[_distance_ArrIndex].presentValues[
+            amountCondition
+          ] +
+          " gone up"
+      );
+    }
+    if (i == 4) {
+      if (
+        distance_and_amount[current_distance_Index].amountConditions.length == 0
+      ) {
+        distance_and_amountFinished.push(
+          distance_and_amount.splice(current_distance_Index, 1)[0]
+        );
+      }
+      if (distance_and_amount.length == 0) {
+        onEnd(distance_and_amountFinished);
+        console.log(distance_and_amountFinished);
+        //nextSlide
+      } else {
+        present_value_enclosure.style.visibility = "hidden";
+        combination_div_enclosure.style.visibility = "hidden";
+        console.log(distance_and_amount.length);
+        next.style.visibility = "visible";
+        setValues(random_distance_Amount());
+      }
+    }
+    present_value_div.innerHTML = `<p> ${distance_and_amount[_distance_ArrIndex].presentValues[amountCondition]}€ </p>`;
+  }
+
+  /**
+   * Handles the end of the sequence by displaying a final message and populating the form fields with the final values.
+   * It then hides the relevant divs and makes the 'next' button visible.
+   *
+   * @param {Array} finalARR - The array containing the final set of distance and amount combinations.
+   */
+  function onEnd(finalARR) {
+    next.innerHTML = `<p>Fast geschafft! Bitte beantworten Sie noch die letzten neun Fragen auf den nächsten Seiten.</p>`;
+    for (let i = 0; i < finalARR.length; i++) {
+      if (finalARR[i].title == "1degree") {
+        console.log("hello");
+        document.getElementById("A302_01").value =
+          finalARR[i].presentValues.small;
+        document.getElementById("A302_06").value =
+          finalARR[i].presentValues.large;
+      } else if (finalARR[i].title == "5degree") {
+        document.getElementById("A302_02").value =
+          finalARR[i].presentValues.small;
+        document.getElementById("A302_07").value =
+          finalARR[i].presentValues.large;
+      } else if (finalARR[i].title == "10degree") {
+        document.getElementById("A302_03").value =
+          finalARR[i].presentValues.small;
+        document.getElementById("A302_08").value =
+          finalARR[i].presentValues.large;
+      } else if (finalARR[i].title == "25degree") {
+        document.getElementById("A302_04").value =
+          finalARR[i].presentValues.small;
+        document.getElementById("A302_09").value =
+          finalARR[i].presentValues.large;
+      } else if (finalARR[i].title == "50degree") {
+        document.getElementById("A302_05").value =
+          finalARR[i].presentValues.small;
+        document.getElementById("A302_10").value =
+          finalARR[i].presentValues.large;
+      }
+    }
+
+    grandparent_div.style.visibility = "collapse";
+    present_value_enclosure.style.visibility = "collapse";
+    choice_divider_div.style.visibility = "collapse";
+    combination_div_enclosure.style.visibility = "collapse";
+    progress.style.visibility = "collapse";
+    next.style.visibility = "visible";
+
+    SoSciTools.submitButtonsDisplay();
+  }
+
+  //Starts the task
+  setValues(random_distance_Amount());
+</script>
